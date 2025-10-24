@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Shelf Counter — Scanner (v2)</title>
+  <title>Shelf Counter — Scanner (v3)</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -37,6 +37,7 @@
         <div id="overlay"></div>
       </div>
       <div id="status" aria-live="polite">Scanner idle.</div>
+      <div id="zxHint" class="muted small"></div>
     </section>
 
     <section class="card">
@@ -100,7 +101,7 @@
 
     <section class="card">
       <h2>Send to Google Sheets</h2>
-      <p>Use an <strong>Apps Script Web App</strong> endpoint (paste the URL below). When you click “Send to Sheets”, the app POSTs the entries as JSON. The script will write rows to your chosen spreadsheet.</p>
+      <p>Use an <strong>Apps Script Web App</strong> endpoint (paste the URL below). When you click “Send to Sheets”, the app POSTs the entries as JSON.</p>
       <div class="row">
         <div class="field">
           <label for="webhookUrl">Apps Script Web App URL</label>
@@ -111,23 +112,14 @@
       </div>
       <div id="sendStatus" class="muted"></div>
     </section>
-
-    <section class="card">
-      <h2>Notes</h2>
-      <ul>
-        <li>Works best over <strong>HTTPS</strong>. iPhone/Safari requires camera permission.</li>
-        <li>“Strict EAN/UPC” enforces numeric and checksum for EAN-8, UPC-A (12), and EAN-13.</li>
-        <li>Default Location auto-fills the “Location” field for new entries and persists between sessions.</li>
-      </ul>
-    </section>
   </main>
 
   <footer>
     <small>© <span id="year"></span> Shelf Counter</small>
   </footer>
 
-  <!-- ZXing fallback -->
-  <script id="zxingScript" defer data-loaded="false" src="https://unpkg.com/@zxing/browser@latest"></script>
+  <!-- Pin ZXing to a stable version -->
+  <script id="zxingScript" defer data-loaded="false" src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.4/umd/index.min.js"></script>
   <!-- SheetJS for XLSX export -->
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
