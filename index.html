@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Shelf Counter — Scanner (v3)</title>
+  <title>Shelf Counter — Scanner (v3.1)</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -28,6 +28,7 @@
         <div class="scanner-controls">
           <button id="startBtn">Start Scanner</button>
           <button id="stopBtn" disabled>Stop</button>
+          <button id="nativeBtn" class="ghost hidden">Use Native</button>
         </div>
       </div>
 
@@ -108,7 +109,6 @@
           <input id="webhookUrl" type="url" placeholder="https://script.google.com/macros/s/AKf.../exec" />
         </div>
         <button id="sendSheetsBtn">Send to Sheets</button>
-        <button id="helpBtn" class="ghost">Setup Help</button>
       </div>
       <div id="sendStatus" class="muted"></div>
     </section>
@@ -118,8 +118,7 @@
     <small>© <span id="year"></span> Shelf Counter</small>
   </footer>
 
-  <!-- Pin ZXing to a stable version -->
-  <script id="zxingScript" defer data-loaded="false" src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.4/umd/index.min.js"></script>
+  <!-- We will load ZXing dynamically in script.js with multiple fallbacks -->
   <!-- SheetJS for XLSX export -->
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 

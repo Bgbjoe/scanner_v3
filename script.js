@@ -1,4 +1,4 @@
-/* Shelf Counter v3 — script.js (robust ZXing fallback) */
+/* Shelf Counter v3.1 — tougher ZXing loader with fallbacks and clear errors */
 
 (() => {
   const video = document.getElementById('video');
@@ -7,6 +7,7 @@
   const cameraSelect = document.getElementById('cameraSelect');
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
+  const nativeBtn = document.getElementById('nativeBtn');
   const statusEl = document.getElementById('status');
   const zxHint = document.getElementById('zxHint');
   const strictToggle = document.getElementById('strictToggle');
@@ -27,13 +28,12 @@
   const webhookUrlInput = document.getElementById('webhookUrl');
   const sendSheetsBtn = document.getElementById('sendSheetsBtn');
   const sendStatus = document.getElementById('sendStatus');
-  const helpBtn = document.getElementById('helpBtn');
 
   const yearSpan = document.getElementById('year');
   yearSpan.textContent = new Date().getFullYear();
 
-  const STORAGE_KEY = 'shelf_counter_rows_v3';
-  const PREFS_KEY = 'shelf_counter_prefs_v3';
+  const STORAGE_KEY = 'shelf_counter_rows_v3_1';
+  const PREFS_KEY = 'shelf_counter_prefs_v3_1';
   let rows = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
   let prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{"defaultLoc": "", "strict": false, "webhook": ""}');
 
@@ -42,7 +42,6 @@
   webhookUrlInput.value = prefs.webhook || '';
 
   let scanning = false;
-  let useNativeDetector = false;
   let zxingReader = null;
   let zxingControls = null;
   let mediaStream = null;
@@ -98,7 +97,10 @@
 
     rows.push({ ts: Date.now(), barcode: code, qty, desc, loc });
     saveRows(); render();
-    barcodeInput.value = ''; qtyInput.value = ''; descInput.value = ''; locInput.value = '';
+    barcodeInput.value = '';
+    qtyInput.value = '';
+    descInput.value = '';
+    locInput.value = '';
     barcodeInput.focus();
   }
 
@@ -156,6 +158,7 @@
     } catch (e) { sendStatus.textContent = 'Send failed: ' + e.message; }
   });
 
+  // Camera + scanning
   async function enumerateCameras() {
     try { const devices = await navigator.mediaDevices.enumerateDevices();
       const videos = devices.filter(d => d.kind === 'videoinput');
@@ -170,8 +173,21 @@
     const constraints = { audio:false, video:{ deviceId: deviceId ? { exact: deviceId } : undefined, facingMode: deviceId ? undefined : 'environment', width:{ideal:1280}, height:{ideal:720} } };
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia(constraints); video.srcObject = mediaStream; await video.play();
-      statusEl.textContent = 'Camera started. Initializing scanner…'; canvas.width = video.videoWidth || 1280; canvas.height = video.videoHeight || 720;
-      useNativeDetector = 'BarcodeDetector' in window; if (useNativeDetector) { await runNativeDetector(); } else { await runZXing(); }
+      statusEl.textContent = 'Camera started. Initializing scanner…';
+      canvas.width = video.videoWidth || 1280; canvas.height = video.videoHeight || 720;
+
+      if ('BarcodeDetector' in window) {
+        nativeBtn.classList.remove('hidden');
+      } else {
+        nativeBtn.classList.add('hidden');
+      }
+
+      // Prefer native; if not, load ZXing with fallbacks
+      if ('BarcodeDetector' in window) {
+        await runNativeDetector();
+      } else {
+        await runZXingWithFallbacks();
+      }
     } catch (err) {
       console.error(err); statusEl.textContent = 'Camera error. Check permissions and HTTPS.'; startBtn.disabled = false; stopBtn.disabled = true; scanning = false;
     }
@@ -183,51 +199,90 @@
     statusEl.textContent = 'Scanner stopped.';
   }
   startBtn.addEventListener('click', startScanner); stopBtn.addEventListener('click', stopScanner);
+  nativeBtn.addEventListener('click', runNativeDetector);
 
   async function runNativeDetector() {
     statusEl.textContent = 'Using native BarcodeDetector.';
-    const formats = ['qr_code','ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf'].filter(f => (window.BarcodeDetector.getSupportedFormats ? window.BarcodeDetector.getSupportedFormats().includes(f) : true));
-    const detector = new window.BarcodeDetector({ formats });
-    const tick = async () => {
-      if (!scanning) return;
-      try { ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const barcodes = await detector.detect(canvas); if (barcodes?.length) { const code = barcodes[0].rawValue || barcodes[0].rawData || ''; if (code) handleDetect(code); }
-      } catch {}
-      requestAnimationFrame(tick);
-    }; tick();
+    try {
+      const formats = ['qr_code','ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf'];
+      const supported = window.BarcodeDetector.getSupportedFormats ? await window.BarcodeDetector.getSupportedFormats() : formats;
+      const detector = new window.BarcodeDetector({ formats: formats.filter(f => supported.includes(f)) });
+      const tick = async () => {
+        if (!scanning) return;
+        try {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const barcodes = await detector.detect(canvas);
+          if (barcodes?.length) {
+            const code = barcodes[0].rawValue || barcodes[0].rawData || '';
+            if (code) handleDetect(code);
+          }
+        } catch {}
+        requestAnimationFrame(tick);
+      };
+      tick();
+    } catch (e) {
+      console.warn('Native detector failed, falling back to ZXing', e);
+      await runZXingWithFallbacks();
+    }
   }
 
-  async function runZXing() {
-    statusEl.textContent = 'Loading ZXing fallback…';
+  async function runZXingWithFallbacks() {
+    zxHint.textContent = 'Loading ZXing fallback… (trying multiple sources)';
     try {
-      await ensureZXingLoaded(); console.log('ZXing version', window.ZXing?.ZXingVersion || 'unknown');
-      const { BrowserMultiFormatReader } = window.ZXing; if (!BrowserMultiFormatReader) throw new Error('ZXing BrowserMultiFormatReader missing.');
+      await loadZXingMulti();
+      const { BrowserMultiFormatReader } = window.ZXing; if (!BrowserMultiFormatReader) throw new Error('BrowserMultiFormatReader missing.');
       zxingReader = new BrowserMultiFormatReader();
       const selectedDeviceId = cameraSelect.value || undefined;
       zxingControls = await zxingReader.decodeFromVideoDevice(selectedDeviceId, video, (result, err) => {
-        if (!scanning) return; if (result?.text) { handleDetect(result.text); }
+        if (!scanning) return; if (result?.text) handleDetect(result.text);
       });
       statusEl.textContent = 'ZXing scanner running.'; zxHint.textContent = '';
     } catch (e) {
-      console.error('ZXing load/run error', e);
-      zxHint.textContent = 'ZXing fallback failed to load. You can still enter barcodes manually. Try clearing cache or updating your browser.';
+      console.error('ZXing failed from all sources', e);
+      zxHint.innerHTML = 'ZXing failed to load. Options: <ul><li>Tap <b>Use Native</b> (if shown)</li><li>Try another network/browser</li><li>Self-host ZXing: put <code>zxing/index.min.js</code> next to this page and reload</li></ul>';
       statusEl.textContent = 'Scanner ready (manual entry).';
     }
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src; s.defer = true; s.crossOrigin = 'anonymous';
+      s.onload = resolve; s.onerror = () => reject(new Error('Failed to load ' + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function loadZXingMulti() {
+    // try jsDelivr pinned
+    try {
+      await loadWithTimeout(() => loadScript('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.4/umd/index.min.js'), 4000);
+      if (window.ZXing) return;
+      throw new Error('No ZXing after jsDelivr');
+    } catch {}
+    // try unpkg pinned
+    try {
+      await loadWithTimeout(() => loadScript('https://unpkg.com/@zxing/browser@0.1.4/umd/index.min.js'), 4000);
+      if (window.ZXing) return;
+      throw new Error('No ZXing after unpkg');
+    } catch {}
+    // try local path (if user self-hosts file)
+    await loadWithTimeout(() => loadScript('./zxing/index.min.js'), 4000);
+    if (!window.ZXing) throw new Error('No ZXing after local');
+  }
+
+  function loadWithTimeout(loaderFn, ms) {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const timer = setTimeout(() => { if (!done) { done = true; reject(new Error('Timeout')); } }, ms);
+      loaderFn().then(() => { if (!done) { done = true; clearTimeout(timer); resolve(); } }).catch(err => { if (!done) { done = true; clearTimeout(timer); reject(err); } });
+    });
   }
 
   function handleDetect(code) {
     if (barcodeInput.dataset.last === code && (Date.now() - (parseInt(barcodeInput.dataset.lastTs||'0',10))) < 1500) return;
     barcodeInput.value = code; barcodeInput.dataset.last = code; barcodeInput.dataset.lastTs = String(Date.now());
     statusEl.textContent = `Scanned: ${code}`; qtyInput.focus();
-  }
-
-  async function ensureZXingLoaded() {
-    const s = document.getElementById('zxingScript'); if (s.dataset.loaded === 'true') return;
-    await new Promise((resolve, reject) => {
-      s.addEventListener('load', () => { s.dataset.loaded = 'true'; resolve(); }, { once:true });
-      s.addEventListener('error', reject, { once:true });
-      if (s.readyState === 'complete') { s.dataset.loaded = 'true'; resolve(); }
-    });
   }
 
   function validateEANUPC(code) {

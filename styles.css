@@ -11,6 +11,7 @@ main { max-width: 960px; margin: 0 auto; padding: 8px; }
 label { display:block; font-size:.85rem; color:#444; margin-bottom:4px; }
 .small { font-size: .85rem; }
 .muted { color:#666; }
+.hidden { display:none; }
 input, select, button { font-size: 1rem; padding: 10px 12px; border-radius: 10px; border: 1px solid #ddd; outline: none; }
 input:focus, select:focus { border-color: #666; }
 button { background:#111; color:#fff; border: none; cursor: pointer; }
