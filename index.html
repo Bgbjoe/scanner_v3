@@ -1,286 +1,136 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <title>Inventory Scanner (iOS Optimized)</title>
-  <link rel="manifest" href="manifest.webmanifest?v=3">
-  <meta name="theme-color" content="#ffffff">
-  <style>
-    :root { --pad: 14px; --radius: 14px; }
-    html, body { margin:0; padding:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background:#f7f7f8; color:#111; }
-    header { position:sticky; top:0; background:#fff; padding: var(--pad); border-bottom:1px solid #e6e6e6; z-index:10; }
-    h1 { margin:0; font-size: 1.2rem; }
-    .container { padding: var(--pad); }
-    .card { background:#fff; border:1px solid #e6e6e6; border-radius: var(--radius); padding: var(--pad); margin-bottom: var(--pad); }
-    label { display:block; font-size: .9rem; margin-bottom: 6px; color:#444; }
-    input[type="text"], input[type="number"] {
-      width: 100%; padding: 12px; border:1px solid #d9d9dc; border-radius: 10px; font-size: 16px; box-sizing: border-box; background:#fff;
-    }
-    button {
-      appearance:none; border:none; background:#111; color:#fff; padding:12px 14px; border-radius: 10px; font-size:16px; cursor:pointer;
-    }
-    button.secondary { background:#efeff2; color:#111; }
-    button.warn { background:#d11a2a; }
-    .row { display:flex; gap:10px; }
-    .row > * { flex:1; }
-    .actions { display:flex; gap:10px; flex-wrap:wrap; }
-    #reader { width:100%; max-width: 640px; margin: 10px auto; }
-    video { width:100%; border-radius: 10px; background:#000; }
-    #status { font-size:.9rem; color:#666; }
-    table { width:100%; border-collapse: collapse; font-size: 14px; }
-    th, td { padding:10px; border-bottom:1px solid #eee; text-align:left; }
-    tfoot td { font-weight:600; }
-    .small { font-size:.8rem; color:#666; }
-  </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shelf Counter — Scanner (v2)</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header>
-    <h1>Inventory Scanner (iPhone)</h1>
-    <div class="small">Optimized for iOS Safari. Scan → enter qty → export CSV.</div>
+    <h1>Shelf Counter</h1>
+    <p class="sub">Scan a barcode, enter quantity & location, export or send to Google Sheets.</p>
   </header>
 
-  <div class="container">
-    <div class="card">
-      <div class="row" style="align-items:flex-end;">
-        <div>
-          <label for="barcode">Barcode (auto-fills on scan)</label>
-          <input id="barcode" type="text" inputmode="numeric" placeholder="Scan or type…">
+  <main>
+    <section class="card">
+      <div class="row space-between">
+        <div class="row" style="gap:12px; align-items:flex-end;">
+          <div>
+            <label for="cameraSelect">Camera</label>
+            <select id="cameraSelect"></select>
+          </div>
+          <div>
+            <label><input type="checkbox" id="strictToggle" /> Strict EAN/UPC</label>
+            <div class="muted small">Numeric-only + checksum for 8/12/13 digits.</div>
+          </div>
         </div>
-        <div style="max-width: 140px;">
-          <label for="qty">Qty</label>
-          <input id="qty" type="number" min="0" step="1" placeholder="0">
-        </div>
-      </div>
-      <div class="row" style="margin-top:10px; align-items:center;">
-        <div>
-          <label for="location">Location / Shelf (optional)</label>
-          <input id="location" type="text" placeholder="e.g., OR A, Central, MedSurg 3…">
-        </div>
-      </div>
-
-      <div class="actions" style="margin-top:10px;">
-        <button id="scanBtn">Start Camera Scan</button>
-        <button id="stopBtn" class="secondary">Stop Camera</button>
-        <button id="addBtn">Add Line</button>
-        <button id="clearBtn" class="warn">Clear All</button>
-      </div>
-      <div id="status" class="small" style="margin-top:8px;">Camera idle.</div>
-      <div id="reader"></div>
-    </div>
-
-    <div class="card">
-      <div class="row" style="align-items:flex-end;">
-        <div>
-          <label for="sku">Optional: Item Name / SKU</label>
-          <input id="sku" type="text" placeholder="(If you want to add a description)">
-        </div>
-        <div style="max-width: 180px;">
-          <label>&nbsp;</label>
-          <button id="exportBtn" style="width:100%;">Export CSV</button>
+        <div class="scanner-controls">
+          <button id="startBtn">Start Scanner</button>
+          <button id="stopBtn" disabled>Stop</button>
         </div>
       </div>
-      <div class="small" style="margin-top:6px;">Tip: Tap any cell to edit. Long-press a row to delete.</div>
-    </div>
 
-    <div class="card">
-      <table id="table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Timestamp</th>
-            <th>Barcode</th>
-            <th>Qty</th>
-            <th>Location</th>
-            <th>Item/SKU</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-        <tfoot>
-          <tr><td colspan="6" id="totals">0 items</td></tr>
-        </tfoot>
-      </table>
-    </div>
-  </div>
+      <div class="video-wrap">
+        <video id="video" playsinline muted></video>
+        <canvas id="canvas" class="hidden"></canvas>
+        <div id="overlay"></div>
+      </div>
+      <div id="status" aria-live="polite">Scanner idle.</div>
+    </section>
 
-  <!-- html5-qrcode (commonly more reliable on iOS Safari) -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js"></script>
-  <script>
-    const tableBody = document.querySelector('#table tbody');
-    const totalsCell = document.getElementById('totals');
-    const barcodeInput = document.getElementById('barcode');
-    const qtyInput = document.getElementById('qty');
-    const locationInput = document.getElementById('location');
-    const skuInput = document.getElementById('sku');
-    const statusEl = document.getElementById('status');
+    <section class="card">
+      <h2>Capture</h2>
+      <div class="row">
+        <div class="field">
+          <label for="barcodeInput">Barcode</label>
+          <input id="barcodeInput" type="text" inputmode="numeric" placeholder="Scan or type…" />
+        </div>
+        <div class="field">
+          <label for="qtyInput">Qty on shelf</label>
+          <input id="qtyInput" type="number" min="0" step="1" placeholder="0" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="descInput">Description (optional)</label>
+          <input id="descInput" type="text" placeholder="e.g., 4x4 Gauze" />
+        </div>
+        <div class="field">
+          <label for="locInput">Location</label>
+          <input id="locInput" type="text" placeholder="e.g., Central Supply Aisle 3" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="defaultLocInput">Default Location (sticky)</label>
+          <input id="defaultLocInput" type="text" placeholder="Set once, auto-fill new rows" />
+        </div>
+      </div>
+      <div class="row">
+        <button id="addBtn">Add Row</button>
+        <button id="clearInputsBtn" class="ghost">Clear</button>
+      </div>
+    </section>
 
-    let rows = JSON.parse(localStorage.getItem('inv_rows') || '[]');
-    let html5Qrcode;
-    let isScanning = false;
+    <section class="card">
+      <h2>Entries</h2>
+      <div class="table-wrap">
+        <table id="dataTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Timestamp</th>
+              <th>Barcode</th>
+              <th>Qty</th>
+              <th>Description</th>
+              <th>Location</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row">
+        <button id="exportCsvBtn">Export CSV</button>
+        <button id="exportXlsxBtn">Export XLSX</button>
+        <button id="clearAllBtn" class="danger ghost">Clear All</button>
+      </div>
+    </section>
 
-    function render() {
-      tableBody.innerHTML = '';
-      rows.forEach((r, i) => {
-        const tr = document.createElement('tr');
-        const cells = [ i + 1, r.timestamp, r.barcode, r.qty, r.location || '', r.sku || '' ];
-        cells.forEach((val, idx) => {
-          const td = document.createElement('td');
-          td.textContent = val;
-          td.contentEditable = idx !== 0;
-          td.addEventListener('input', () => {
-            const keyMap = ['idx','timestamp','barcode','qty','location','sku'];
-            const key = keyMap[idx];
-            if (key) {
-              rows[i][key] = td.textContent;
-              persist();
-              updateTotals();
-            }
-          });
-          td.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            if (confirm('Delete this row?')) {
-              rows.splice(i,1);
-              persist();
-              render();
-            }
-          });
-          tr.appendChild(td);
-        });
-        tableBody.appendChild(tr);
-      });
-      updateTotals();
-    }
+    <section class="card">
+      <h2>Send to Google Sheets</h2>
+      <p>Use an <strong>Apps Script Web App</strong> endpoint (paste the URL below). When you click “Send to Sheets”, the app POSTs the entries as JSON. The script will write rows to your chosen spreadsheet.</p>
+      <div class="row">
+        <div class="field">
+          <label for="webhookUrl">Apps Script Web App URL</label>
+          <input id="webhookUrl" type="url" placeholder="https://script.google.com/macros/s/AKf.../exec" />
+        </div>
+        <button id="sendSheetsBtn">Send to Sheets</button>
+        <button id="helpBtn" class="ghost">Setup Help</button>
+      </div>
+      <div id="sendStatus" class="muted"></div>
+    </section>
 
-    function updateTotals() {
-      const total = rows.reduce((acc, r) => acc + (parseFloat(r.qty) || 0), 0);
-      totalsCell.textContent = `${rows.length} lines • ${total} total units`;
-    }
+    <section class="card">
+      <h2>Notes</h2>
+      <ul>
+        <li>Works best over <strong>HTTPS</strong>. iPhone/Safari requires camera permission.</li>
+        <li>“Strict EAN/UPC” enforces numeric and checksum for EAN-8, UPC-A (12), and EAN-13.</li>
+        <li>Default Location auto-fills the “Location” field for new entries and persists between sessions.</li>
+      </ul>
+    </section>
+  </main>
 
-    function persist() {
-      localStorage.setItem('inv_rows', JSON.stringify(rows));
-    }
+  <footer>
+    <small>© <span id="year"></span> Shelf Counter</small>
+  </footer>
 
-    function addLine() {
-      const barcode = barcodeInput.value.trim();
-      const qty = qtyInput.value.trim();
-      if (!barcode) { alert('Please scan or enter a barcode.'); return; }
-      if (!qty) { alert('Please enter a quantity.'); return; }
-      const now = new Date();
-      const ts = now.toISOString().replace('T', ' ').slice(0,19);
-      rows.push({ timestamp: ts, barcode, qty, location: locationInput.value.trim(), sku: skuInput.value.trim() });
-      barcodeInput.value = '';
-      qtyInput.value = '';
-      persist();
-      render();
-      barcodeInput.focus();
-    }
+  <!-- ZXing fallback -->
+  <script id="zxingScript" defer data-loaded="false" src="https://unpkg.com/@zxing/browser@latest"></script>
+  <!-- SheetJS for XLSX export -->
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-    function toCSV(rows) {
-      const headers = ['Timestamp','Barcode','Qty','Location','Item/SKU'];
-      const escape = (v) => {
-        const s = (v ?? '').toString();
-        if (s.includes('"') || s.includes(',') || s.includes('\n')) {
-          return '"' + s.replace(/"/g, '""') + '"';
-        }
-        return s;
-      };
-      const lines = [headers.join(',')];
-      rows.forEach(r => lines.push([r.timestamp, r.barcode, r.qty, r.location || '', r.sku || ''].map(escape).join(',')));
-      return lines.join('\n');
-    }
-
-    function exportCSV() {
-      const csv = toCSV(rows);
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const date = new Date().toISOString().slice(0,10);
-      a.href = url;
-      a.download = `inventory-scan-${date}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-
-    async function startScan() {
-      if (isScanning) return;
-      statusEl.textContent = 'Starting camera…';
-      try {
-        const config = {
-          fps: 15,
-          qrbox: { width: 280, height: 180 },
-          aspectRatio: 1.777,
-          rememberLastUsedCamera: true,
-          showTorchButtonIfSupported: true,
-          defaultZoomValueIfSupported: 2,
-          experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-        };
-        const formatsToSupport = [
-          Html5QrcodeSupportedFormats.QR_CODE,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39
-        ];
-        html5Qrcode = new Html5Qrcode('reader', { formatsToSupport });
-        isScanning = true;
-
-        const devices = await Html5Qrcode.getCameras();
-        // Prefer back camera when available
-        const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length - 1];
-        const camId = backCam ? backCam.id : (devices[0] && devices[0].id);
-        await html5Qrcode.start(
-          { deviceId: { exact: camId } },
-          config,
-          (decodedText, decodedResult) => {
-            barcodeInput.value = decodedText;
-            // brief visual feedback by flashing the border of the reader
-            const el = document.getElementById('reader');
-            el.style.outline = '4px solid #00b341';
-            setTimeout(() => (el.style.outline = 'none'), 250);
-            document.getElementById('qty').focus();
-          },
-          (errMessage) => {
-            // per-frame decode errors are noisy; keep status subtle
-            statusEl.textContent = 'Scanning…';
-          }
-        );
-        statusEl.textContent = 'Point camera at barcode…';
-      } catch (e) {
-        console.error(e);
-        statusEl.textContent = 'Camera error: ' + (e.message || e.toString());
-        alert('Could not start camera. Ensure HTTPS, grant Camera permission in Settings > Safari > Camera, then reload.');
-        isScanning = false;
-      }
-    }
-
-    async function stopScan() {
-      if (html5Qrcode && isScanning) {
-        try { await html5Qrcode.stop(); } catch(e) {}
-        try { await html5Qrcode.clear(); } catch(e) {}
-      }
-      isScanning = false;
-      statusEl.textContent = 'Camera idle.';
-    }
-
-    document.getElementById('addBtn').addEventListener('click', addLine);
-    document.getElementById('exportBtn').addEventListener('click', exportCSV);
-    document.getElementById('scanBtn').addEventListener('click', startScan);
-    document.getElementById('stopBtn').addEventListener('click', stopScan);
-    document.getElementById('clearBtn').addEventListener('click', () => {
-      if (confirm('Clear all rows?')) {
-        rows = [];
-        persist();
-        render();
-      }
-    });
-
-    render();
-
-    // No service worker here to avoid stale caching on iOS during setup.
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
