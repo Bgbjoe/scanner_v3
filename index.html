@@ -3,125 +3,47 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Shelf Counter — Scanner (v3.1)</title>
+  <title>Shelf Counter — Native Scanner Only</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header>
     <h1>Shelf Counter</h1>
-    <p class="sub">Scan a barcode, enter quantity & location, export or send to Google Sheets.</p>
+    <p class="sub">Scan a barcode with your phone’s built-in scanner, enter quantity & location, export or send to Google Sheets.</p>
   </header>
-
   <main>
     <section class="card">
       <div class="row space-between">
         <div class="row" style="gap:12px; align-items:flex-end;">
-          <div>
-            <label for="cameraSelect">Camera</label>
-            <select id="cameraSelect"></select>
-          </div>
-          <div>
-            <label><input type="checkbox" id="strictToggle" /> Strict EAN/UPC</label>
-            <div class="muted small">Numeric-only + checksum for 8/12/13 digits.</div>
-          </div>
+          <div class="field"><label for="cameraSelect">Camera</label><select id="cameraSelect"></select></div>
+          <div class="field"><label><input type="checkbox" id="strictToggle" /> Strict EAN/UPC</label><div class="muted small">Numeric-only + checksum for 8/12/13 digits.</div></div>
         </div>
-        <div class="scanner-controls">
-          <button id="startBtn">Start Scanner</button>
-          <button id="stopBtn" disabled>Stop</button>
-          <button id="nativeBtn" class="ghost hidden">Use Native</button>
-        </div>
+        <div class="scanner-controls"><button id="startBtn">Start Scanner</button><button id="stopBtn" disabled>Stop</button></div>
       </div>
-
-      <div class="video-wrap">
-        <video id="video" playsinline muted></video>
-        <canvas id="canvas" class="hidden"></canvas>
-        <div id="overlay"></div>
-      </div>
-      <div id="status" aria-live="polite">Scanner idle.</div>
-      <div id="zxHint" class="muted small"></div>
+      <div class="video-wrap"><video id="video" playsinline muted></video><canvas id="canvas" class="hidden"></canvas><div id="overlay"></div></div>
+      <div id="status" aria-live="polite">Scanner idle.</div><div id="zxHint" class="muted small"></div>
     </section>
-
     <section class="card">
       <h2>Capture</h2>
-      <div class="row">
-        <div class="field">
-          <label for="barcodeInput">Barcode</label>
-          <input id="barcodeInput" type="text" inputmode="numeric" placeholder="Scan or type…" />
-        </div>
-        <div class="field">
-          <label for="qtyInput">Qty on shelf</label>
-          <input id="qtyInput" type="number" min="0" step="1" placeholder="0" />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label for="descInput">Description (optional)</label>
-          <input id="descInput" type="text" placeholder="e.g., 4x4 Gauze" />
-        </div>
-        <div class="field">
-          <label for="locInput">Location</label>
-          <input id="locInput" type="text" placeholder="e.g., Central Supply Aisle 3" />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label for="defaultLocInput">Default Location (sticky)</label>
-          <input id="defaultLocInput" type="text" placeholder="Set once, auto-fill new rows" />
-        </div>
-      </div>
-      <div class="row">
-        <button id="addBtn">Add Row</button>
-        <button id="clearInputsBtn" class="ghost">Clear</button>
-      </div>
+      <div class="row"><div class="field"><label for="barcodeInput">Barcode</label><input id="barcodeInput" type="text" inputmode="numeric" placeholder="Scan or type…"/></div>
+      <div class="field"><label for="qtyInput">Qty on shelf</label><input id="qtyInput" type="number" min="0" step="1" placeholder="0"/></div></div>
+      <div class="row"><div class="field"><label for="descInput">Description (optional)</label><input id="descInput" type="text" placeholder="e.g., 4x4 Gauze"/></div>
+      <div class="field"><label for="locInput">Location</label><input id="locInput" type="text" placeholder="e.g., Central Supply Aisle 3"/></div></div>
+      <div class="row"><div class="field"><label for="defaultLocInput">Default Location (sticky)</label><input id="defaultLocInput" type="text" placeholder="Set once, auto-fill new rows"/></div></div>
+      <div class="row"><button id="addBtn">Add Row</button><button id="clearInputsBtn" class="ghost">Clear</button></div>
     </section>
-
     <section class="card">
-      <h2>Entries</h2>
-      <div class="table-wrap">
-        <table id="dataTable">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Timestamp</th>
-              <th>Barcode</th>
-              <th>Qty</th>
-              <th>Description</th>
-              <th>Location</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="row">
-        <button id="exportCsvBtn">Export CSV</button>
-        <button id="exportXlsxBtn">Export XLSX</button>
-        <button id="clearAllBtn" class="danger ghost">Clear All</button>
-      </div>
+      <h2>Entries</h2><div class="table-wrap"><table id="dataTable"><thead><tr><th>#</th><th>Timestamp</th><th>Barcode</th><th>Qty</th><th>Description</th><th>Location</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+      <div class="row"><button id="exportCsvBtn">Export CSV</button><button id="exportXlsxBtn">Export XLSX</button><button id="clearAllBtn" class="danger ghost">Clear All</button></div>
     </section>
-
-    <section class="card">
-      <h2>Send to Google Sheets</h2>
-      <p>Use an <strong>Apps Script Web App</strong> endpoint (paste the URL below). When you click “Send to Sheets”, the app POSTs the entries as JSON.</p>
-      <div class="row">
-        <div class="field">
-          <label for="webhookUrl">Apps Script Web App URL</label>
-          <input id="webhookUrl" type="url" placeholder="https://script.google.com/macros/s/AKf.../exec" />
-        </div>
-        <button id="sendSheetsBtn">Send to Sheets</button>
-      </div>
-      <div id="sendStatus" class="muted"></div>
+    <section class="card"><h2>Send to Google Sheets</h2>
+      <p>Use an <strong>Apps Script Web App</strong> endpoint (paste the URL below). When you click “Send to Sheets”, the app POSTs all entries as JSON.</p>
+      <div class="row"><div class="field"><label for="webhookUrl">Apps Script Web App URL</label><input id="webhookUrl" type="url" placeholder="https://script.google.com/macros/s/AKf.../exec" /></div>
+      <button id="sendSheetsBtn">Send to Sheets</button></div><div id="sendStatus" class="muted small"></div>
     </section>
   </main>
-
-  <footer>
-    <small>© <span id="year"></span> Shelf Counter</small>
-  </footer>
-
-  <!-- We will load ZXing dynamically in script.js with multiple fallbacks -->
-  <!-- SheetJS for XLSX export -->
+  <footer><small>© <span id="year"></span> Shelf Counter</small></footer>
   <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
   <script src="script.js"></script>
 </body>
 </html>
